@@ -1,12 +1,14 @@
 [package]
-name       = "choco"
-version    = "0.1.0"
-authors    = ["Artur Helmanau <m30bit@gmail.com>"]
-categories = ["text-processing"]
-keywords   = ["text"]
-license    = "MIT OR Apache-2.0"
-edition    = "2021"
-readme     = "README.md"
+name        = "choco"
+description = "markup language for dialogue systems"
+version     = "0.1.1"
+authors     = ["Artur Helmanau <m30bit@gmail.com>"]
+categories  = ["text-processing"]
+keywords    = ["text"]
+license     = "MIT OR Apache-2.0"
+edition     = "2021"
+repository  = "https://github.com/30bit/choco"
+readme      = "README.md"
 
 [dependencies]
 petgraph = { version = "0.6.4", default-features = false }
