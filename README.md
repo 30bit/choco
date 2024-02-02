@@ -1,6 +1,6 @@
 [![choco crate](https://img.shields.io/crates/v/choco.svg)](https://crates.io/crates/choco)
 [![choco documentation](https://docs.rs/choco/badge.svg)](https://docs.rs/choco)
-[![workflow run status](https://github.com/30bit/choco/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/30bit/choco/actions/workflows/ci.yml)
+[![workflow run status](https://github.com/30bit/choco/actions/workflows/ci.yml/badge.svg)](https://github.com/30bit/choco/actions/workflows/ci.yml)
 
 Choco is a markup language for dialogue systems. It works by emitting signals from text into rust via special `@`-syntax.
 
