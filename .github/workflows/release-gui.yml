@@ -15,7 +15,7 @@ jobs:
     runs-on: ${{ matrix.os }}-latest
     timeout-minutes: 45
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         name: [Windows, Linux, MacOS, MacArm64]
         include:
@@ -35,12 +35,12 @@ jobs:
       dir-prefix: ${{matrix.target && format('{0}/', matrix.target)}}
       extension: ${{matrix.extension && format('.{0}', matrix.extension)}}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{matrix.target}}
       - run: cargo build -p chocobrew --release ${{env.target}}
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: ${{format('{0}', matrix.target || matrix.os)}}
           path: target/${{env.dir-prefix}}release/chocobrew${{env.extension}}
@@ -51,8 +51,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/download-artifact@v3
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
       - run: mv ubuntu/* chocobrew-linux && chmod +x chocobrew-linux
       - run: mv windows/* chocobrew-windows.exe
       - run: mv aarch64-apple-darwin/* chocobrew-macos-arm64.app && chmod +x chocobrew-macos-arm64.app
