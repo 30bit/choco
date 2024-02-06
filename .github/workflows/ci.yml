@@ -38,8 +38,7 @@ jobs:
           toolchain: ${{matrix.rust}}
           targets: ${{matrix.target}}
           components: ${{matrix.components}}
-      - run: sudo apt-get install librust-atk-dev && sudo apt-get install libgtk-3-dev
-      - run: cargo check --workspace ${{env.target}}
+      - run: cargo check -p choco ${{env.target}}
 
   test:
     name: Test
