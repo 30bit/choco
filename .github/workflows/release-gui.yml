@@ -39,6 +39,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{matrix.target}}
+      - if: matrix.os == 'ubuntu'
+        run: sudo apt-get install librust-atk-dev
       - run: cargo build -p chocobrew --release ${{env.target}}
       - uses: actions/upload-artifact@v4
         with:
