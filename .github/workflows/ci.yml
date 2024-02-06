@@ -38,6 +38,7 @@ jobs:
           toolchain: ${{matrix.rust}}
           targets: ${{matrix.target}}
           components: ${{matrix.components}}
+      - run: sudo apt-get install librust-atk-dev && sudo apt-get install libgtk-3-dev
       - run: cargo check --workspace ${{env.target}}
 
   test:
@@ -49,6 +50,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: llvm-tools, rustc-dev
+      - run: sudo apt-get install librust-atk-dev && sudo apt-get install libgtk-3-dev
       - run: cargo test --workspace --all-targets
 
   doc:
@@ -60,6 +62,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
+      - run: sudo apt-get install librust-atk-dev && sudo apt-get install libgtk-3-dev
       - run: cargo test --workspace --doc
       - run: cargo doc --workspace 
 
@@ -83,6 +86,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: clippy, rustc-dev
+      - run: sudo apt-get install librust-atk-dev && sudo apt-get install libgtk-3-dev
       - run: cargo clippy --workspace --all-targets -- -Dclippy::all -Dclippy::pedantic
 
   fmt:
