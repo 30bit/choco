@@ -1,15 +1,30 @@
-[package]
-name        = "choco"
-description = "markup language for dialogue systems"
-version     = "0.1.1"
-authors     = ["Artur Helmanau <m30bit@gmail.com>"]
-categories  = ["text-processing"]
-keywords    = ["text"]
-license     = "MIT OR Apache-2.0"
-edition     = "2021"
-repository  = "https://github.com/30bit/choco"
-readme      = "README.md"
+[workspace]
+members = [".", "chocobrew"]
 
-[dependencies]
+[workspace.package]
+version    = "0.1.2"
+authors    = ["Artur Helmanau <m30bit@gmail.com>"]
+license    = "MIT OR Apache-2.0"
+edition    = "2021"
+repository = "https://github.com/30bit/choco"
+
+[package]
+name                 = "choco"
+description          = "markup language for dialogue systems"
+authors              = ["Artur Helmanau <m30bit@gmail.com>"]
+categories           = ["text-processing"]
+keywords             = ["text"]
+readme               = "README.md"
+version.workspace    = true
+license.workspace    = true
+edition.workspace    = true
+repository.workspace = true
+
+[workspace.dependencies]
+choco    = { version = "=0.1.2", path = "." }
 petgraph = { version = "0.6.4", default-features = false }
 bitflags = "2.4.2"
+
+[dependencies]
+petgraph.workspace = true
+bitflags.workspace = true

@@ -44,8 +44,8 @@ Style names are slightly opinionated, but you decide how to display a mix of the
 | p    | Panel       | i.e. block                     |
 | c    | `Code`      |                                |
 | q    | > Quote     | doesn't have to be block-quote |
-| b    | *Bold*      |                                |
-| i    | **Italic**  |                                |
+| b    | **Bold**    |                                |
+| i    | *Italic*    |                                |
 | s    | ~~Scratch~~ | i.e. strike-through            |
 
 # License

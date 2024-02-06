@@ -1,0 +1,25 @@
+[package]
+name                 = "chocobrew"
+description          = "text editor for choco"
+categories           = ["text-editors", "development-tools"]
+keywords             = ["text", "choco", "gui"]
+readme               = "README.md"
+version.workspace    = true
+authors.workspace    = true
+license.workspace    = true
+edition.workspace    = true
+repository.workspace = true
+
+[dependencies]
+choco.workspace = true
+eframe = { version = "0.25.0", default-features = false, features = [
+    "persistence",
+    "default_fonts",
+    "glow",
+    "wayland",
+    "x11",
+] }
+rfd = "0.13.0"
+log = "0.4.20"
+env_logger = "0.11.1"
+rand = { version = "0.8.5", default-features = false, features = ["getrandom"] }
