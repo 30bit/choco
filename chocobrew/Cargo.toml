@@ -3,6 +3,7 @@ name                 = "chocobrew"
 description          = "text editor for choco"
 categories           = ["text-editors", "development-tools"]
 keywords             = ["text", "choco", "gui"]
+readme               = "README.md"
 version.workspace    = true
 authors.workspace    = true
 license.workspace    = true
