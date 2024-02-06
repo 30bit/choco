@@ -55,14 +55,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-      - run: mv ubuntu/* chocobrew-linux && chmod +x chocobrew-linux
+      - run: mv ubuntu/* chocobrew-linux
       - run: mv windows/* chocobrew-windows.exe
-      - run: mv aarch64-apple-darwin/* chocobrew-macos-arm64.app && chmod +x chocobrew-macos-arm64.app
-      - run: mv x86_64-apple-darwin/* chocobrew-macos.app && chmod +x chocobrew-macos.app
+      - run: mv aarch64-apple-darwin/* chocobrew-macos-arm64
+      - run: mv x86_64-apple-darwin/* chocobrew-macos
       - uses: softprops/action-gh-release@v1
         with:
           files: |
             chocobrew-linux
             chocobrew-windows.exe
-            chocobrew-macos-arm64.app
-            chocobrew-macos.app
+            chocobrew-macos-arm64
+            chocobrew-macos

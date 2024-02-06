@@ -14,7 +14,7 @@ choco.workspace = true
 eframe = { version = "0.25.0", default-features = false, features = [
     "persistence",
     "default_fonts",
-    "wgpu",
+    "glow",
     "wayland",
     "x11",
 ] }
