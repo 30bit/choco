@@ -12,6 +12,7 @@ bitflags! {
         const BOLD =  0b0000_0000_0000_1000;
         const ITALIC = 0b0000_0000_0001_0000;
         const SCRATCH = 0b0000_0000_0010_0000;
+        const UNDERLINE = 0b0000_0000_0100_0000;
     }
 }
 
@@ -26,6 +27,7 @@ impl Style {
                 'b' => Style::BOLD,
                 'i' => Style::ITALIC,
                 's' => Style::SCRATCH,
+                'u' => Style::UNDERLINE,
                 _ => Style::REGULAR,
             }
         }
