@@ -7,7 +7,12 @@ use choco::{
 };
 use copypasta::{ClipboardContext, ClipboardProvider};
 use eframe::{
-    egui::{self, mutex::Mutex, text::CCursorRange, RichText},
+    egui::{
+        self,
+        mutex::Mutex,
+        text::{CCursor, CCursorRange},
+        RichText,
+    },
     epaint::Color32,
 };
 use std::{
@@ -15,7 +20,6 @@ use std::{
     fs, io, ops,
     path::{Path, PathBuf},
     sync::Arc,
-    thread,
 };
 
 fn main() -> eframe::Result<()> {
@@ -44,7 +48,11 @@ impl App {
         }
     }
 
-    fn show_menu(&mut self, ui: &mut egui::Ui, shortcuts: &CommandShortcuts) -> SelectionCommands {
+    fn show_menu(
+        &mut self,
+        ui: &mut egui::Ui,
+        shortcuts: &CommandShortcuts,
+    ) -> (SelectionCommands, UndoerCommands) {
         ui.style_mut().visuals.button_frame = false;
         ui.horizontal(|ui| {
             ui.columns(2, |ui| {
@@ -67,10 +75,20 @@ impl App {
                 });
                 ui[1]
                     .with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-                        SelectionCommands::show_menu_button_in(
-                            ui,
-                            shortcuts,
-                            self.clipboard.is_some(),
+                        let _state = self.state.lock();
+                        (
+                            SelectionCommands::show_menu_button_in(
+                                ui,
+                                shortcuts,
+                                self.clipboard.is_some(),
+                            ),
+                            UndoerCommands::show_menu_button_in(
+                                ui, shortcuts,
+                                // FIXME: Nothing is being undone
+                                // !state.has_undo,
+                                // !state.has_redo,
+                                true, true,
+                            ),
                         )
                     })
                     .inner
@@ -213,7 +231,12 @@ impl App {
         }
     }
 
-    fn show_editor(&mut self, ui: &mut egui::Ui, selection: &SelectionCommands) {
+    fn show_editor(
+        &mut self,
+        ui: &mut egui::Ui,
+        selection: &SelectionCommands,
+        _undo: &UndoerCommands,
+    ) {
         let mut state = self.state.lock();
         ui.style_mut().visuals.extreme_bg_color = Color32::TRANSPARENT;
         let editor_id = egui::Id::new("choco-editor");
@@ -258,8 +281,36 @@ impl App {
             .frame(false)
             .id(editor_id);
         let editor_output = editor.show(ui);
+        // let mut editor_state = editor_output.state;
+        // let content_state = (
+        //     editor_state.ccursor_range().unwrap_or_default(),
+        //     state.content.clone(),
+        // );
+        // let mut editor_undoer = editor_state.undoer();
+        // editor_undoer.feed_state(
+        //     SystemTime::UNIX_EPOCH
+        //         .elapsed()
+        //         .unwrap_or_default()
+        //         .as_secs_f64(),
+        //     &content_state,
+        // );
+        // if editor_undoer.has_undo(&content_state) {
+        //     state.has_undo = true;
+        // }
+        // if editor_undoer.has_redo(&content_state) {
+        //     state.has_redo = true;
+        // }
+        // if state.has_undo && undo.do_undo {
+        //     state.has_redo = editor_undoer.undo(&content_state).is_some();
+        // }
+        // if state.has_redo && undo.do_redo {
+        //     editor_undoer.redo(&content_state);
+        // }
+        // editor_state.set_undoer(editor_undoer);
+
         if editor_output.response.changed() {
             state.has_unsaved_changes = true;
+            // state.has_undo = true;
             state.update_state();
         }
     }
@@ -275,7 +326,7 @@ impl eframe::App for App {
         } else if shortcuts.do_save_as {
             State::save_file_as(self.state.clone());
         }
-        let selection = egui::TopBottomPanel::new(egui::panel::TopBottomSide::Top, "menu")
+        let (selection, undo) = egui::TopBottomPanel::new(egui::panel::TopBottomSide::Top, "menu")
             .resizable(false)
             .show(ctx, |ui| self.show_menu(ui, &shortcuts))
             .inner;
@@ -305,13 +356,15 @@ impl eframe::App for App {
             egui::ScrollArea::new([false, true])
                 .auto_shrink(false)
                 .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
-                .show(ui, |ui| self.show_editor(ui, &selection))
+                .show(ui, |ui| self.show_editor(ui, &selection, &undo))
         });
     }
 }
 
 struct State {
     has_unsaved_changes: bool,
+    // has_undo: bool,
+    // has_redo: bool,
     opened_file_path: Option<PathBuf>,
     content: String,
     story: Story,
@@ -323,6 +376,8 @@ impl Default for State {
     fn default() -> Self {
         Self {
             has_unsaved_changes: true,
+            // has_undo: false,
+            // has_redo: false,
             opened_file_path: None,
             content: String::new(),
             story: Story::new(),
@@ -359,55 +414,55 @@ impl State {
     }
 
     fn save_file(self_: Arc<Mutex<Self>>) {
-        thread::spawn(move || {
-            let mut lock = self_.lock();
-            if !lock.has_unsaved_changes {
-                if let Some(path) = &lock.opened_file_path {
-                    let path = path.clone();
-                    if let Err(err) = lock.write(path) {
-                        log::error!("when saving file: {err}");
-                    } else {
-                        lock.has_unsaved_changes = false;
-                    }
+        // thread::spawn(move || {
+        let mut lock = self_.lock();
+        if !lock.has_unsaved_changes {
+            if let Some(path) = &lock.opened_file_path {
+                let path = path.clone();
+                if let Err(err) = lock.write(path) {
+                    log::error!("when saving file: {err}");
+                } else {
+                    lock.has_unsaved_changes = false;
                 }
             }
-        });
+        }
+        // });
     }
 
     fn save_file_as(self_: Arc<Mutex<Self>>) {
-        thread::spawn(move || {
-            let mut lock = self_.lock();
-            let path = rfd::FileDialog::new()
-                .set_file_name("untitled.choco")
-                .save_file();
-            let mut ok = true;
-            if let Some(path) = &path {
-                if let Err(err) = lock.write(path) {
-                    log::error!("when saving file: {err}");
-                    ok = false;
-                }
+        // thread::spawn(move || {
+        let mut lock = self_.lock();
+        let path = rfd::FileDialog::new()
+            .set_file_name("untitled.choco")
+            .save_file();
+        let mut ok = true;
+        if let Some(path) = &path {
+            if let Err(err) = lock.write(path) {
+                log::error!("when saving file: {err}");
+                ok = false;
             }
-            if ok && lock.opened_file_path.is_none() {
-                lock.opened_file_path = path;
-                lock.has_unsaved_changes = false;
-            }
-        });
+        }
+        if ok && lock.opened_file_path.is_none() {
+            lock.opened_file_path = path;
+            lock.has_unsaved_changes = false;
+        }
+        // });
     }
 
     fn open_file(self_: Arc<Mutex<Self>>) {
-        thread::spawn(move || {
-            let mut lock = self_.lock();
-            lock.opened_file_path = rfd::FileDialog::new()
-                .add_filter("choco source file", &["choco"])
-                .pick_file();
-            if let Some(path) = &lock.opened_file_path {
-                let path = path.clone();
-                if let Err(err) = lock.read(path) {
-                    log::error!("when opening file: {err}");
-                }
-                lock.has_unsaved_changes = false;
+        // thread::spawn(move || {
+        let mut lock = self_.lock();
+        lock.opened_file_path = rfd::FileDialog::new()
+            .add_filter("choco source file", &["choco"])
+            .pick_file();
+        if let Some(path) = &lock.opened_file_path {
+            let path = path.clone();
+            if let Err(err) = lock.read(path) {
+                log::error!("when opening file: {err}");
             }
-        });
+            lock.has_unsaved_changes = false;
+        }
+        // });
     }
 }
 
@@ -420,6 +475,8 @@ struct CommandShortcuts {
     save_as: egui::KeyboardShortcut,
     copy: egui::KeyboardShortcut,
     paste: egui::KeyboardShortcut,
+    undo: egui::KeyboardShortcut,
+    redo: egui::KeyboardShortcut,
 }
 
 impl CommandShortcuts {
@@ -429,6 +486,8 @@ impl CommandShortcuts {
         let save_as = command_shortcut(egui::Key::S, true);
         let copy = command_shortcut(egui::Key::C, false);
         let paste = command_shortcut(egui::Key::V, false);
+        let undo = command_shortcut(egui::Key::Z, false);
+        let redo = command_shortcut(egui::Key::Z, true);
         ctx.input_mut(|input| Self {
             do_open: input.consume_shortcut(&open),
             do_save_as: input.consume_shortcut(&save_as),
@@ -438,6 +497,8 @@ impl CommandShortcuts {
             save_as,
             copy,
             paste,
+            undo,
+            redo,
         })
     }
 }
@@ -483,16 +544,46 @@ impl SelectionCommands {
 }
 
 fn char_cursor_range_to_byte_range(s: &str, range: CCursorRange) -> ops::Range<usize> {
+    let find_byte_index = |char_cursor: CCursor| {
+        s.char_indices()
+            .nth(char_cursor.index)
+            .map(|(index, _)| index)
+    };
     let [char_left, char_right] = range.sorted();
-    let left = s
-        .char_indices()
-        .nth(char_left.index)
-        .map(|(index, _)| index)
-        .unwrap_or(0);
-    let right = s
-        .char_indices()
-        .nth(char_right.index)
-        .map(|(index, _)| index)
-        .unwrap_or(s.len());
+    let secondary = find_byte_index(range.secondary);
+    let left = find_byte_index(char_left).or(secondary).unwrap_or(s.len());
+    let right = find_byte_index(char_right).unwrap_or(left);
     left..right
+}
+
+#[derive(Default)]
+pub struct UndoerCommands {
+    do_undo: bool,
+    do_redo: bool,
+}
+
+impl UndoerCommands {
+    fn show_menu_button_in(
+        ui: &mut egui::Ui,
+        shortcuts: &CommandShortcuts,
+        nothing_to_undo: bool,
+        nothing_to_redo: bool,
+    ) -> Self {
+        let mut output = Self::default();
+        let mut undo_text = RichText::new("Undo");
+        if nothing_to_undo {
+            undo_text = undo_text.strikethrough();
+        }
+        if command_button(ui, undo_text, shortcuts.undo) && !nothing_to_undo {
+            output.do_undo = true;
+        }
+        let mut redo_text = RichText::new("Redo");
+        if nothing_to_redo {
+            redo_text = redo_text.strikethrough();
+        }
+        if command_button(ui, redo_text, shortcuts.redo) && !nothing_to_redo {
+            output.do_redo = true;
+        }
+        output
+    }
 }
