@@ -74,53 +74,63 @@ impl App {
         Ok(())
     }
 
-    fn show_menu(&mut self, ui: &mut egui::Ui) {
+    fn open_file(&mut self) {
+        self.opened_file_path = rfd::FileDialog::new()
+            .add_filter("choco source file", &["choco"])
+            .pick_file();
+        if let Some(path) = &self.opened_file_path {
+            if let Err(err) = self.read(path.clone()) {
+                log::error!("when opening file: {err}");
+            }
+            self.has_unsaved_changes = false;
+        }
+    }
+
+    fn save_file(&mut self) {
+        if !self.has_unsaved_changes {
+            if let Some(path) = &self.opened_file_path {
+                if let Err(err) = self.write(path) {
+                    log::error!("when saving file: {err}");
+                } else {
+                    self.has_unsaved_changes = false;
+                }
+            }
+        }
+    }
+
+    fn save_file_as(&mut self) {
+        let path = rfd::FileDialog::new()
+            .set_file_name("untitled.choco")
+            .save_file();
+        let mut ok = true;
+        if let Some(path) = &path {
+            if let Err(err) = self.write(path) {
+                log::error!("when saving file: {err}");
+                ok = false;
+            }
+        }
+        if ok && self.opened_file_path.is_none() {
+            self.opened_file_path = path;
+            self.has_unsaved_changes = false;
+        }
+    }
+
+    fn show_menu(&mut self, ui: &mut egui::Ui, shortcuts: &CommandShortcuts) {
         ui.style_mut().visuals.button_frame = false;
-        ui.columns(2, |ui| {
-            ui[0].with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                if ui.small_button("Open..").clicked() {
-                    self.opened_file_path = rfd::FileDialog::new()
-                        .add_filter("choco source file", &["choco"])
-                        .pick_file();
-                    if let Some(path) = &self.opened_file_path {
-                        if let Err(err) = self.read(path.clone()) {
-                            log::error!("when opening file: {err}");
-                        }
-                        self.has_unsaved_changes = false;
-                    }
-                }
-            });
-            ui[1].with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let mut save_text = RichText::new("Save");
-                if !self.has_unsaved_changes || self.opened_file_path.is_none() {
-                    save_text = save_text.weak();
-                }
-                if ui.small_button(save_text).clicked() {
-                    if let Some(path) = &self.opened_file_path {
-                        if let Err(err) = self.write(path) {
-                            log::error!("when saving file: {err}");
-                        } else {
-                            self.has_unsaved_changes = false;
-                        }
-                    }
-                }
-                if ui.small_button("Save As..").clicked() {
-                    let path = rfd::FileDialog::new()
-                        .set_file_name("untitled.choco")
-                        .save_file();
-                    let mut ok = true;
-                    if let Some(path) = &path {
-                        if let Err(err) = self.write(path) {
-                            log::error!("when saving file: {err}");
-                            ok = false;
-                        }
-                    }
-                    if ok && self.opened_file_path.is_none() {
-                        self.opened_file_path = path;
-                        self.has_unsaved_changes = false;
-                    }
-                }
-            })
+        ui.menu_button("File", |ui| {
+            if command_button(ui, RichText::new("Open.."), shortcuts.open) {
+                self.open_file();
+            }
+            let mut save_text = RichText::new("Save");
+            if !self.has_unsaved_changes || self.opened_file_path.is_none() {
+                save_text = save_text.weak();
+            }
+            if command_button(ui, save_text, shortcuts.save) {
+                self.save_file();
+            }
+            if command_button(ui, RichText::new("Save as.."), shortcuts.save_as) {
+                self.save_file_as();
+            }
         });
     }
 
@@ -276,9 +286,17 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let shortcuts = CommandShortcuts::consume_in(ctx);
+        if shortcuts.do_open {
+            self.open_file()
+        } else if shortcuts.do_save {
+            self.save_file()
+        } else if shortcuts.do_save_as {
+            self.save_file_as()
+        }
         egui::TopBottomPanel::new(egui::panel::TopBottomSide::Top, "menu")
             .resizable(false)
-            .show(ctx, |ui| self.show_menu(ui));
+            .show(ctx, |ui| self.show_menu(ui, &shortcuts));
         egui::SidePanel::new(egui::panel::Side::Left, "guide")
             .min_width(ctx.screen_rect().width() * 0.19)
             .default_width(ctx.screen_rect().width() * 0.1914)
@@ -308,4 +326,46 @@ impl eframe::App for App {
                 .show(ui, |ui| self.show_editor(ui))
         });
     }
+}
+
+struct CommandShortcuts {
+    do_open: bool,
+    open: egui::KeyboardShortcut,
+    do_save: bool,
+    save: egui::KeyboardShortcut,
+    do_save_as: bool,
+    save_as: egui::KeyboardShortcut,
+}
+
+impl CommandShortcuts {
+    pub fn consume_in(ctx: &egui::Context) -> Self {
+        let open = command_shortcut(egui::Key::O, false);
+        let save = command_shortcut(egui::Key::S, false);
+        let save_as = command_shortcut(egui::Key::S, true);
+        ctx.input_mut(|input| Self {
+            do_open: input.consume_shortcut(&open),
+            open,
+            do_save: input.consume_shortcut(&save),
+            save,
+            do_save_as: input.consume_shortcut(&save_as),
+            save_as,
+        })
+    }
+}
+
+fn command_shortcut(key: egui::Key, shift: bool) -> egui::KeyboardShortcut {
+    #[cfg(target_os = "macos")]
+    let mut modifier = egui::Modifiers::MAC_CMD;
+    #[cfg(not(target_os = "macos"))]
+    let mut modifier = egui::Modifiers::CTRL;
+    if shift {
+        modifier = modifier | egui::Modifiers::SHIFT;
+    }
+    egui::KeyboardShortcut::new(modifier, key)
+}
+
+fn command_button(ui: &mut egui::Ui, text: RichText, shortcut: egui::KeyboardShortcut) -> bool {
+    let shortcut_text = ui.ctx().format_shortcut(&shortcut);
+    ui.add(egui::Button::new(text).small().shortcut_text(shortcut_text))
+        .clicked()
 }

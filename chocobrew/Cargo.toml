@@ -14,9 +14,11 @@ repository.workspace = true
 choco.workspace = true
 eframe = { version = "0.25.0", default-features = false, features = [
     "persistence",
+    "accesskit",
     "default_fonts",
-    "glow",
+    "wgpu",
     "wayland",
+    "web_screen_reader",
     "x11",
 ] }
 rfd = "0.13.0"
