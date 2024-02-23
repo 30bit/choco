@@ -2,7 +2,7 @@
 members = [".", "chocobrew"]
 
 [workspace.package]
-version    = "0.1.2"
+version    = "0.2.0"
 authors    = ["Artur Helmanau <m30bit@gmail.com>"]
 license    = "MIT OR Apache-2.0"
 edition    = "2021"
@@ -21,7 +21,7 @@ edition.workspace    = true
 repository.workspace = true
 
 [workspace.dependencies]
-choco    = { version = "=0.1.2", path = "." }
+choco    = { version = "=0.2.0", path = "." }
 petgraph = { version = "0.6.4", default-features = false }
 bitflags = "2.4.2"
 
