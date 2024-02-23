@@ -119,7 +119,7 @@ impl App {
                     if was_selected {
                         state.starting_bookmark = String::new();
                     } else {
-                        state.starting_bookmark = bookmark.to_owned();
+                        state.starting_bookmark = bookmark.clone();
                     }
                 }
             }
@@ -413,6 +413,7 @@ impl State {
         Ok(())
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     fn save_file(self_: Arc<Mutex<Self>>) {
         // thread::spawn(move || {
         let mut lock = self_.lock();
@@ -429,6 +430,7 @@ impl State {
         // });
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     fn save_file_as(self_: Arc<Mutex<Self>>) {
         // thread::spawn(move || {
         let mut lock = self_.lock();
@@ -449,6 +451,7 @@ impl State {
         // });
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     fn open_file(self_: Arc<Mutex<Self>>) {
         // thread::spawn(move || {
         let mut lock = self_.lock();
