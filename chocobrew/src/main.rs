@@ -417,7 +417,7 @@ impl State {
     fn save_file(self_: Arc<Mutex<Self>>) {
         // thread::spawn(move || {
         let mut lock = self_.lock();
-        if !lock.has_unsaved_changes {
+        if lock.has_unsaved_changes {
             if let Some(path) = &lock.opened_file_path {
                 let path = path.clone();
                 if let Err(err) = lock.write(path) {
