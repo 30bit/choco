@@ -5,11 +5,10 @@ use choco::{
     },
     Story,
 };
-use copypasta::{ClipboardContext, ClipboardProvider};
+use copypasta::{ClipboardContext, ClipboardProvider as _};
 use eframe::{
     egui::{
         self,
-        mutex::Mutex,
         text::{CCursor, CCursorRange},
         RichText,
     },
@@ -19,7 +18,6 @@ use std::{
     collections::HashMap,
     fs, io, ops,
     path::{Path, PathBuf},
-    sync::Arc,
 };
 
 fn main() -> eframe::Result<()> {
@@ -36,14 +34,14 @@ fn main() -> eframe::Result<()> {
 }
 
 struct App {
-    state: Arc<Mutex<State>>,
+    state: State,
     clipboard: Option<ClipboardContext>,
 }
 
 impl App {
     fn new(_cc: &eframe::CreationContext<'_>) -> Self {
         Self {
-            state: Arc::new(Mutex::new(State::default())),
+            state: State::default(),
             clipboard: ClipboardContext::new().ok(),
         }
     }
@@ -58,37 +56,28 @@ impl App {
             ui.columns(2, |ui| {
                 ui[0].with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
                     if command_button(ui, RichText::new("Open.."), shortcuts.open) {
-                        State::open_file(self.state.clone());
+                        self.state.open_file();
                     }
                     let mut save_text = RichText::new("Save");
-                    if !self.state.lock().has_unsaved_changes
-                        || self.state.lock().opened_file_path.is_none()
-                    {
+                    if !self.state.has_unsaved_changes || self.state.opened_file_path.is_none() {
                         save_text = save_text.strikethrough();
                     }
                     if command_button(ui, save_text, shortcuts.save) {
-                        State::save_file(self.state.clone());
+                        self.state.save_file();
                     }
                     if command_button(ui, RichText::new("Save as.."), shortcuts.save_as) {
-                        State::save_file_as(self.state.clone());
+                        self.state.save_file_as();
                     }
                 });
                 ui[1]
                     .with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-                        let _state = self.state.lock();
                         (
                             SelectionCommands::show_menu_button_in(
                                 ui,
                                 shortcuts,
                                 self.clipboard.is_some(),
                             ),
-                            UndoerCommands::show_menu_button_in(
-                                ui, shortcuts,
-                                // FIXME: Nothing is being undone
-                                // !state.has_undo,
-                                // !state.has_redo,
-                                true, true,
-                            ),
+                            UndoerCommands::show_menu_button_in(ui, shortcuts, true, true),
                         )
                     })
                     .inner
@@ -105,21 +94,20 @@ impl App {
         ui.style_mut().visuals.widgets.active.bg_stroke = egui::Stroke::NONE;
 
         ui.horizontal_wrapped(|ui| {
-            let mut state = self.state.lock();
-            let mut bookmarks: Vec<_> = state.guide.keys().map(String::to_owned).collect();
+            let mut bookmarks: Vec<_> = self.state.guide.keys().map(String::to_owned).collect();
             bookmarks.sort_unstable();
 
             for bookmark in bookmarks {
                 let mut text = RichText::new(&bookmark).monospace();
-                let was_selected = bookmark == state.starting_bookmark;
+                let was_selected = bookmark == self.state.starting_bookmark;
                 if was_selected {
                     text = text.underline();
                 }
                 if ui.button(text).clicked() {
                     if was_selected {
-                        state.starting_bookmark = String::new();
+                        self.state.starting_bookmark = String::new();
                     } else {
-                        state.starting_bookmark = bookmark.clone();
+                        self.state.starting_bookmark = bookmark.clone();
                     }
                 }
             }
@@ -127,8 +115,7 @@ impl App {
     }
 
     fn show_events(&self, range: ops::Range<usize>, ui: &mut egui::Ui) {
-        let state = self.state.lock();
-        let events = choco::event_iter(state.content.get(range).unwrap_or_default());
+        let events = choco::event_iter(self.state.content.get(range).unwrap_or_default());
         for event in events {
             match event {
                 choco::Event::Signal(choco::Signal::Ping) => {
@@ -187,12 +174,15 @@ impl App {
     }
 
     fn show_preview(&self, ui: &mut egui::Ui) {
-        let state = self.state.lock();
-        if let Some(start) = state.guide.get(&state.starting_bookmark) {
-            let index_to_name: HashMap<_, _> =
-                state.guide.iter().map(|entry| (entry.1, entry.0)).collect();
-            let mut bfs = visit::Bfs::new(&state.story, *start);
-            while let Some(index) = bfs.next(&state.story) {
+        if let Some(start) = self.state.guide.get(&self.state.starting_bookmark) {
+            let index_to_name: HashMap<_, _> = self
+                .state
+                .guide
+                .iter()
+                .map(|entry| (entry.1, entry.0))
+                .collect();
+            let mut bfs = visit::Bfs::new(&self.state.story, *start);
+            while let Some(index) = bfs.next(&self.state.story) {
                 egui::Frame::default()
                     .outer_margin(egui::Margin {
                         right: 16.0,
@@ -202,8 +192,8 @@ impl App {
                         egui::CollapsingHeader::new(index_to_name[&index])
                             .default_open(true)
                             .show(ui, |ui| {
-                                self.show_events(state.story[index].clone(), ui);
-                                for edge in state.story.edges(index) {
+                                self.show_events(self.state.story[index].clone(), ui);
+                                for edge in self.state.story.edges(index) {
                                     egui::Frame::default()
                                         .outer_margin(egui::Margin {
                                             right: 16.0,
@@ -218,7 +208,7 @@ impl App {
                                                 ui,
                                                 |ui| {
                                                     self.show_events(
-                                                        state.story[edge.id()].clone(),
+                                                        self.state.story[edge.id()].clone(),
                                                         ui,
                                                     );
                                                 },
@@ -237,7 +227,6 @@ impl App {
         selection: &SelectionCommands,
         _undo: &UndoerCommands,
     ) {
-        let mut state = self.state.lock();
         ui.style_mut().visuals.extreme_bg_color = Color32::TRANSPARENT;
         let editor_id = egui::Id::new("choco-editor");
         if selection.do_copy {
@@ -245,8 +234,8 @@ impl App {
                 if let Some(selection_range) = text.ccursor_range() {
                     if let Some(clipboard) = &mut self.clipboard {
                         let byte_range =
-                            char_cursor_range_to_byte_range(&state.content, selection_range);
-                        let slice = &state.content[byte_range];
+                            char_cursor_range_to_byte_range(&self.state.content, selection_range);
+                        let slice = &self.state.content[byte_range];
                         if let Err(err) = clipboard.set_contents(slice.to_owned()) {
                             log::error!("when clipboard copying: {err}");
                         }
@@ -261,10 +250,10 @@ impl App {
                         match clipboard.get_contents() {
                             Ok(paste) => {
                                 let byte_range = char_cursor_range_to_byte_range(
-                                    &state.content,
+                                    &self.state.content,
                                     selection_range,
                                 );
-                                state.content.replace_range(byte_range, &paste);
+                                self.state.content.replace_range(byte_range, &paste);
                             }
                             Err(err) => log::error!("when clipboard pasting: {err}"),
                         }
@@ -272,7 +261,7 @@ impl App {
                 }
             }
         }
-        let editor = egui::TextEdit::multiline(&mut state.content)
+        let editor = egui::TextEdit::multiline(&mut self.state.content)
             .code_editor()
             .margin(egui::Vec2::ZERO)
             .hint_text("Let it brew..")
@@ -281,37 +270,9 @@ impl App {
             .frame(false)
             .id(editor_id);
         let editor_output = editor.show(ui);
-        // let mut editor_state = editor_output.state;
-        // let content_state = (
-        //     editor_state.ccursor_range().unwrap_or_default(),
-        //     state.content.clone(),
-        // );
-        // let mut editor_undoer = editor_state.undoer();
-        // editor_undoer.feed_state(
-        //     SystemTime::UNIX_EPOCH
-        //         .elapsed()
-        //         .unwrap_or_default()
-        //         .as_secs_f64(),
-        //     &content_state,
-        // );
-        // if editor_undoer.has_undo(&content_state) {
-        //     state.has_undo = true;
-        // }
-        // if editor_undoer.has_redo(&content_state) {
-        //     state.has_redo = true;
-        // }
-        // if state.has_undo && undo.do_undo {
-        //     state.has_redo = editor_undoer.undo(&content_state).is_some();
-        // }
-        // if state.has_redo && undo.do_redo {
-        //     editor_undoer.redo(&content_state);
-        // }
-        // editor_state.set_undoer(editor_undoer);
-
         if editor_output.response.changed() {
-            state.has_unsaved_changes = true;
-            // state.has_undo = true;
-            state.update_state();
+            self.state.has_unsaved_changes = true;
+            self.state.update_state();
         }
     }
 }
@@ -320,11 +281,11 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let shortcuts = CommandShortcuts::consume_in(ctx);
         if shortcuts.do_open {
-            State::open_file(self.state.clone());
+            self.state.open_file();
         } else if shortcuts.do_save {
-            State::save_file(self.state.clone());
+            self.state.save_file();
         } else if shortcuts.do_save_as {
-            State::save_file_as(self.state.clone());
+            self.state.save_file_as();
         }
         let (selection, undo) = egui::TopBottomPanel::new(egui::panel::TopBottomSide::Top, "menu")
             .resizable(false)
@@ -363,8 +324,6 @@ impl eframe::App for App {
 
 struct State {
     has_unsaved_changes: bool,
-    // has_undo: bool,
-    // has_redo: bool,
     opened_file_path: Option<PathBuf>,
     content: String,
     story: Story,
@@ -376,8 +335,6 @@ impl Default for State {
     fn default() -> Self {
         Self {
             has_unsaved_changes: true,
-            // has_undo: false,
-            // has_redo: false,
             opened_file_path: None,
             content: String::new(),
             story: Story::new(),
@@ -413,59 +370,47 @@ impl State {
         Ok(())
     }
 
-    #[allow(clippy::needless_pass_by_value)]
-    fn save_file(self_: Arc<Mutex<Self>>) {
-        // thread::spawn(move || {
-        let mut lock = self_.lock();
-        if lock.has_unsaved_changes {
-            if let Some(path) = &lock.opened_file_path {
+    fn save_file(&mut self) {
+        if self.has_unsaved_changes {
+            if let Some(path) = &self.opened_file_path {
                 let path = path.clone();
-                if let Err(err) = lock.write(path) {
+                if let Err(err) = self.write(path) {
                     log::error!("when saving file: {err}");
                 } else {
-                    lock.has_unsaved_changes = false;
+                    self.has_unsaved_changes = false;
                 }
             }
         }
-        // });
     }
 
-    #[allow(clippy::needless_pass_by_value)]
-    fn save_file_as(self_: Arc<Mutex<Self>>) {
-        // thread::spawn(move || {
-        let mut lock = self_.lock();
+    fn save_file_as(&mut self) {
         let path = rfd::FileDialog::new()
             .set_file_name("untitled.choco")
             .save_file();
         let mut ok = true;
         if let Some(path) = &path {
-            if let Err(err) = lock.write(path) {
+            if let Err(err) = self.write(path) {
                 log::error!("when saving file: {err}");
                 ok = false;
             }
         }
-        if ok && lock.opened_file_path.is_none() {
-            lock.opened_file_path = path;
-            lock.has_unsaved_changes = false;
+        if ok && self.opened_file_path.is_none() {
+            self.opened_file_path = path;
+            self.has_unsaved_changes = false;
         }
-        // });
     }
 
-    #[allow(clippy::needless_pass_by_value)]
-    fn open_file(self_: Arc<Mutex<Self>>) {
-        // thread::spawn(move || {
-        let mut lock = self_.lock();
-        lock.opened_file_path = rfd::FileDialog::new()
+    fn open_file(&mut self) {
+        self.opened_file_path = rfd::FileDialog::new()
             .add_filter("choco source file", &["choco"])
             .pick_file();
-        if let Some(path) = &lock.opened_file_path {
+        if let Some(path) = &self.opened_file_path {
             let path = path.clone();
-            if let Err(err) = lock.read(path) {
+            if let Err(err) = self.read(path) {
                 log::error!("when opening file: {err}");
             }
-            lock.has_unsaved_changes = false;
+            self.has_unsaved_changes = false;
         }
-        // });
     }
 }
 
