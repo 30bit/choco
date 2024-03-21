@@ -193,13 +193,22 @@ pub enum Event {
 pub struct EventFlow<'a, 's, P: Plugin> {
     pub plugins: &'s mut P,
     raw_iter: &'s mut RawEventIter<'a>,
+    peeked: &'s mut Option<Event>,
 }
 
 impl<'a, 's, P: Plugin> EventFlow<'a, 's, P> {
     #[inline]
     #[must_use]
-    pub fn new(plugins: &'s mut P, raw_iter: &'s mut RawEventIter<'a>) -> Self {
-        Self { plugins, raw_iter }
+    pub fn new(
+        plugins: &'s mut P,
+        raw_iter: &'s mut RawEventIter<'a>,
+        peeked: &'s mut Option<Event>,
+    ) -> Self {
+        Self {
+            plugins,
+            raw_iter,
+            peeked,
+        }
     }
 
     #[inline]
@@ -214,9 +223,17 @@ impl<'a, 's, P: Plugin> EventFlow<'a, 's, P> {
             EventFlow {
                 plugins: new_plugins,
                 raw_iter: self.raw_iter,
+                peeked: self.peeked,
             },
             self.plugins,
         )
+    }
+
+    pub fn peek(&mut self) -> Option<&Event> {
+        if self.peeked.is_none() {
+            *self.peeked = self.next();
+        }
+        self.peeked.as_ref()
     }
 
     #[inline]
@@ -229,6 +246,7 @@ impl<'a, 's, P: Plugin> EventFlow<'a, 's, P> {
         EventFlow {
             plugins: self.plugins,
             raw_iter: self.raw_iter,
+            peeked: self.peeked,
         }
     }
 }
@@ -237,6 +255,9 @@ impl<'a, 's, P: Plugin> Iterator for EventFlow<'a, 's, P> {
     type Item = Event;
 
     fn next(&mut self) -> Option<Self::Item> {
+        if self.peeked.is_some() {
+            return self.peeked.take();
+        }
         let raw_event = self.raw_iter.next()?;
         Some(match raw_event.kind {
             RawEventKind::Text => Event::Raw(raw_event),
