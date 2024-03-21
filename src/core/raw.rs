@@ -4,8 +4,8 @@ use ::core::{
 };
 
 const SIGNAL_CHAR: char = '@';
-const LEFT_BRACKET_CHARS: [char; 3] = ['{', '[', '('];
-const RIGHT_BRACKET_CHARS: [char; 3] = ['}', ']', ')'];
+const LEFT_BRACKET_CHARS: [char; 4] = ['{', '[', '(', '<'];
+const RIGHT_BRACKET_CHARS: [char; 4] = ['}', ']', ')', '>'];
 
 use ::core::ops;
 

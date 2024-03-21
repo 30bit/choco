@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "chocobrew"]
+members = [".", "choco_macros", "chocobrew", "rewrite"]
 
 [workspace.package]
 version    = "0.2.2"
