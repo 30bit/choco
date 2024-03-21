@@ -1,9 +1,17 @@
 [package]
-name = "rewrite"
-version.workspace = true
-authors.workspace = true
-license.workspace = true
-edition.workspace = true
+name                 = "rewrite"
+version.workspace    = true
+authors.workspace    = true
+license.workspace    = true
+edition.workspace    = true
 repository.workspace = true
 
+[features]
+default = ["std", "macros", "plugins"]
+std     = []
+macros  = ["choco_macros", "plugins"]
+plugins = ["petgraph", "std"]
+
 [dependencies]
+choco_macros = { workspace = true, optional = true }
+petgraph     = { workspace = true, optional = true }

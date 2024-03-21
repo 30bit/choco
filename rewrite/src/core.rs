@@ -1,9 +1,10 @@
 use ::core::{
+    any::{Any, TypeId},
     iter::{FusedIterator, Peekable},
     ops::Range,
     str::CharIndices,
 };
-use std::any::{Any, TypeId};
+use core::fmt;
 
 const SIGNAL_CHAR: char = '@';
 
@@ -28,13 +29,52 @@ impl<'a> StrRange<'a> {
     }
 }
 
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+pub struct PluginError {
+    pub plugin: TypeId,
+    pub signal_range: Range<usize>,
+    pub msg: &'static str,
+}
+
+impl PluginError {
+    #[inline]
+    #[must_use]
+    pub fn new<P: Plugin>(signal: Range<usize>) -> Self {
+        Self {
+            plugin: TypeId::of::<P>(),
+            signal_range: signal,
+            msg: "",
+        }
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn with_msg(mut self, msg: &'static str) -> Self {
+        self.msg = msg;
+        self
+    }
+}
+
+impl fmt::Display for PluginError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "signal `[{:?}]` can't be taken by plugin: {}",
+            self.signal_range, self.msg
+        )
+    }
+}
+
+pub type PluginResult<T> = Result<T, PluginError>;
+
 pub trait Plugin: Any + Sized {
     /// Try to process `signal`.
     /// If [`Plugin`] implementation doesn't work with that `signal` return [`None`].
     /// Otherwise return [`TypeId`] of the sub [`Plugin`] that successfully handled the `signal`
     ///
     /// [`EventFlow::plugins`] of the passed `flow` parameter is supposed to contain this implementation as sub plugin.
-    fn take_signal<P: Plugin>(signal: StrRange, flow: EventFlow<P>) -> Option<TypeId>;
+    fn take_signal<P: Plugin>(signal: StrRange, flow: EventFlow<P>)
+        -> PluginResult<Option<TypeId>>;
 
     /// Mutably get sub plugin. The plugin itself is considered sub plugin
     #[inline]
@@ -50,8 +90,14 @@ pub trait Plugin: Any + Sized {
 }
 
 impl<T: Plugin, U: Plugin> Plugin for (T, U) {
-    fn take_signal<P: Plugin>(signal: StrRange, mut flow: EventFlow<P>) -> Option<TypeId> {
-        T::take_signal(signal.clone(), flow.clone()).or_else(|| U::take_signal(signal, flow))
+    fn take_signal<P: Plugin>(
+        signal: StrRange,
+        mut flow: EventFlow<P>,
+    ) -> PluginResult<Option<TypeId>> {
+        T::take_signal(signal.clone(), flow.clone())
+            .transpose()
+            .or_else(|| U::take_signal(signal, flow).transpose())
+            .transpose()
     }
 
     fn get_sub_mut<P: Plugin>(&mut self) -> Option<&mut P> {
@@ -112,9 +158,35 @@ impl RawEvent {
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
+pub struct TakenSignal {
+    pub range: Range<usize>,
+    pub plugin: TypeId,
+}
+
+impl TakenSignal {
+    #[inline]
+    #[must_use]
+    pub fn new<P: Plugin>(range: Range<usize>) -> Self {
+        Self {
+            range,
+            plugin: TypeId::of::<P>(),
+        }
+    }
+
+    /// Bundles [`Self::range`] together with original full [`str`]
+    #[inline]
+    pub fn as_of<'a>(&self, full: &'a str) -> StrRange<'a> {
+        StrRange {
+            full,
+            range: self.range.clone(),
+        }
+    }
+}
+
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub enum Event {
     Raw(RawEvent),
-    TakenByPlugin(TypeId),
+    TakenByPlugin(PluginResult<TakenSignal>),
 }
 
 #[derive(Debug)]
@@ -147,6 +219,11 @@ impl<'a, 's, P: Plugin> EventFlow<'a, 's, P> {
         )
     }
 
+    #[inline]
+    pub fn full_str(&self) -> &'a str {
+        self.raw_iter.full
+    }
+
     /// Obtains an owned [`EventFlow`] with shorter lifetimes given a ref
     pub fn clone<'w>(&'w mut self) -> EventFlow<'a, 'w, P> {
         EventFlow {
@@ -170,7 +247,13 @@ impl<'a, 's, P: Plugin> Iterator for EventFlow<'a, 's, P> {
                 },
                 self.clone(),
             )
-            .map(Event::TakenByPlugin)
+            .transpose()
+            .map(|result| {
+                Event::TakenByPlugin(result.map(|plugin| TakenSignal {
+                    range: raw_event.range.clone(),
+                    plugin,
+                }))
+            })
             .unwrap_or_else(|| Event::Raw(raw_event)),
         })
     }
